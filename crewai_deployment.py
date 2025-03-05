@@ -1,5 +1,4 @@
 import os
-os.environ["CREWAI_USE_CHROMADB"] = "false"
 import sqlite3
 import pandas as pd
 import streamlit as st
@@ -7,6 +6,9 @@ from crewai import Crew, Task, Agent
 from langchain.llms import OpenAI
 from scrapy import Selector
 import requests
+
+# Désactiver ChromaDB pour éviter les erreurs de compatibilité avec SQLite
+os.environ["CREWAI_USE_CHROMADB"] = "false"
 
 # --- DATABASE CONFIGURATION ---
 DB_FILE = "investment_data.db"
