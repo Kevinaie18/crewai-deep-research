@@ -1,3 +1,5 @@
+import os
+os.environ["CREWAI_USE_CHROMADB"] = "false"
 import sqlite3
 import pandas as pd
 import streamlit as st
