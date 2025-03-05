@@ -6,4 +6,4 @@ requests
 pandas
 streamlit
 tinydb
-!chromadb
+
