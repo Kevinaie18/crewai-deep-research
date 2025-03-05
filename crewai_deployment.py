@@ -1,100 +1,67 @@
-import os
-import pandas as pd
 import streamlit as st
-from crewai import Crew, Task, Agent
-from langchain.llms import OpenAI
-from scrapy import Selector
 import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from langchain.chat_models import ChatOpenAI
+from langchain.agents import initialize_agent, AgentType
+from langchain.tools import Tool
+from langchain.vectorstores import FAISS
+from langchain.embeddings.openai import OpenAIEmbeddings
 from tinydb import TinyDB, Query
 
-# Désactiver ChromaDB pour éviter les erreurs de compatibilité avec SQLite
-os.environ["CREWAI_USE_CHROMADB"] = "false"
-os.environ["CREWAI_STORAGE_BACKEND"] = "memory"
+# Initialisation de l'agent LLM
+llm = ChatOpenAI(model="gpt-4", temperature=0.7)
 
-# --- DATABASE CONFIGURATION ---
-DB_FILE = "investment_data.json"
-db = TinyDB(DB_FILE)
+# Fonction de scraping web
+def scrape_webpage(url):
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return ' '.join([p.text for p in soup.find_all('p')])
+    except Exception as e:
+        return f"Erreur lors du scraping : {str(e)}"
 
-def save_results(company_name, sector, revenue_currency, risk_assessment, exit_strategy):
-    db.insert({
-        "company_name": company_name,
-        "sector": sector,
-        "revenue_currency": revenue_currency,
-        "risk_assessment": risk_assessment,
-        "exit_strategy": exit_strategy
-    })
+# Définition des outils pour l'agent
+tools = [
+    Tool(
+        name="Web Scraper",
+        func=scrape_webpage,
+        description="Utilise cette fonction pour récupérer des informations depuis un site web."
+    )
+]
 
-def display_results():
-    df = pd.DataFrame(db.all())
-    st.dataframe(df)
-
-# --- AGENTS CONFIGURATION ---
-macro_agent = Agent(
-    name="Macro Analyst",
-    role="Researching macroeconomic trends, currency stability, and regulatory impacts in the target sector.",
-    model="gpt-4o"
+# Initialisation de l'agent LangChain
+agent = initialize_agent(
+    tools,
+    llm,
+    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+    verbose=True
 )
 
-sector_agent = Agent(
-    name="Sector Analyst",
-    role="Identifying key trends, competitors, and pricing structures in the target industry.",
-    model="gpt-4o"
-)
+# Base de données locale avec TinyDB pour stocker les résultats
+db = TinyDB("research_results.json")
 
-scraper_agent = Agent(
-    name="Company Identifier",
-    role="Scraping and collecting information on potential investment targets.",
-    model="gpt-4o"
-)
+# Interface Streamlit
+st.title("🔍 Deep Research avec LangChain Agents")
 
-risk_agent = Agent(
-    name="Risk Evaluator",
-    role="Assessing financial, operational, and exit strategy risks for investment decisions.",
-    model="gpt-4o"
-)
+# Entrée de l'URL
+url = st.text_input("Entrez une URL à analyser :")
 
-reporting_agent = Agent(
-    name="Investment Analyst",
-    role="Compiling findings into structured reports.",
-    model="gpt-4o"
-)
+if st.button("Lancer l'analyse"):
+    if url:
+        st.write("🔄 Scraping en cours...")
+        scraped_content = scrape_webpage(url)
+        
+        st.write("📌 Contenu extrait :")
+        st.write(scraped_content[:500] + "...")  # Afficher un extrait
 
-# --- TASKS CONFIGURATION ---
-macro_task = Task(
-    description="Analyze macroeconomic stability, inflation hedge mechanisms, and WAEMU FX regulations.",
-    agent=macro_agent
-)
+        st.write("🧠 Analyse et résumé en cours...")
+        result = agent.run(f"Donne-moi un résumé du contenu suivant : {scraped_content}")
 
-sector_task = Task(
-    description="Assess key industry trends, market growth rates, pricing power, and regulatory compliance.",
-    agent=sector_agent
-)
+        st.write("📌 Résumé :")
+        st.write(result)
 
-company_task = Task(
-    description="Identify SMEs matching investment criteria using web scraping and data aggregation.",
-    agent=scraper_agent
-)
-
-risk_task = Task(
-    description="Evaluate financial risks, compliance factors, and propose exit strategies.",
-    agent=risk_agent
-)
-
-reporting_task = Task(
-    description="Compile findings into a structured investment report, including scalability, ESG impact, and recommended investment rationale.",
-    agent=reporting_agent
-)
-
-# --- CREW ASSEMBLY & EXECUTION ---
-investment_crew = Crew(
-    agents=[macro_agent, sector_agent, scraper_agent, risk_agent, reporting_agent],
-    tasks=[macro_task, sector_task, company_task, risk_task, reporting_task]
-)
-
-# Execute the Crew
-investment_crew.kickoff()
-
-# --- STREAMLIT DASHBOARD ---
-st.title("Investment Opportunities Dashboard")
-if st.button("Show Results"):
-    display_results()
+        # Stocker les résultats dans la base locale
+        db.insert({"url": url, "résumé": result})
+    else:
+        st.warning("Veuillez entrer une URL valide.")
