@@ -4,5 +4,4 @@ scrapy
 beautifulsoup4
 requests
 pandas
-sqlite3
 streamlit
