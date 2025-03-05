@@ -6,4 +6,4 @@ requests
 pandas
 streamlit
 tinydb
-
+chromadb==0.3.29  # Forcer une version stable si nécessaire
