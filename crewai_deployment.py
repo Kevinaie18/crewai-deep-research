@@ -1,32 +1,31 @@
 import os
-import sqlite3
 import pandas as pd
 import streamlit as st
 from crewai import Crew, Task, Agent
 from langchain.llms import OpenAI
 from scrapy import Selector
 import requests
+from tinydb import TinyDB, Query
 
 # Désactiver ChromaDB pour éviter les erreurs de compatibilité avec SQLite
 os.environ["CREWAI_USE_CHROMADB"] = "false"
 
 # --- DATABASE CONFIGURATION ---
-DB_FILE = "investment_data.db"
+DB_FILE = "investment_data.json"
+db = TinyDB(DB_FILE)
 
-def initialize_database():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS investment_opportunities (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_name TEXT,
-                        sector TEXT,
-                        revenue_currency TEXT,
-                        risk_assessment TEXT,
-                        exit_strategy TEXT)''')
-    conn.commit()
-    conn.close()
+def save_results(company_name, sector, revenue_currency, risk_assessment, exit_strategy):
+    db.insert({
+        "company_name": company_name,
+        "sector": sector,
+        "revenue_currency": revenue_currency,
+        "risk_assessment": risk_assessment,
+        "exit_strategy": exit_strategy
+    })
 
-initialize_database()
+def display_results():
+    df = pd.DataFrame(db.all())
+    st.dataframe(df)
 
 # --- AGENTS CONFIGURATION ---
 macro_agent = Agent(
@@ -90,20 +89,6 @@ investment_crew = Crew(
     agents=[macro_agent, sector_agent, scraper_agent, risk_agent, reporting_agent],
     tasks=[macro_task, sector_task, company_task, risk_task, reporting_task]
 )
-
-def save_results(company_name, sector, revenue_currency, risk_assessment, exit_strategy):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO investment_opportunities (company_name, sector, revenue_currency, risk_assessment, exit_strategy) VALUES (?, ?, ?, ?, ?)",
-                   (company_name, sector, revenue_currency, risk_assessment, exit_strategy))
-    conn.commit()
-    conn.close()
-
-def display_results():
-    conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT * FROM investment_opportunities", conn)
-    conn.close()
-    st.dataframe(df)
 
 # Execute the Crew
 investment_crew.kickoff()
