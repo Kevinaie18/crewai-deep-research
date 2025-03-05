@@ -9,6 +9,7 @@ from tinydb import TinyDB, Query
 
 # Désactiver ChromaDB pour éviter les erreurs de compatibilité avec SQLite
 os.environ["CREWAI_USE_CHROMADB"] = "false"
+os.environ["CREWAI_STORAGE_BACKEND"] = "memory"
 
 # --- DATABASE CONFIGURATION ---
 DB_FILE = "investment_data.json"
