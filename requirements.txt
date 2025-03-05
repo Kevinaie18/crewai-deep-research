@@ -1,4 +1,3 @@
-crewai
 langchain
 scrapy
 beautifulsoup4
@@ -6,4 +5,5 @@ requests
 pandas
 streamlit
 tinydb
-
+openai
+faiss-cpu
