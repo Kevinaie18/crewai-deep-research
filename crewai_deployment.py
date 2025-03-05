@@ -4,64 +4,98 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from langchain.chat_models import ChatOpenAI
 from langchain.agents import initialize_agent, AgentType
-from langchain.tools import Tool
+from langchain_community.tools import Tool
 from langchain.vectorstores import FAISS
 from langchain.embeddings.openai import OpenAIEmbeddings
-from tinydb import TinyDB, Query
+from tinydb import TinyDB
 
-# Initialisation de l'agent LLM
+# Initialize LLM model
 llm = ChatOpenAI(model="gpt-4", temperature=0.7)
 
-# Fonction de scraping web
+# Define functions for research tasks
 def scrape_webpage(url):
+    """Agent function for web scraping."""
     try:
         response = requests.get(url, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         return ' '.join([p.text for p in soup.find_all('p')])
     except Exception as e:
-        return f"Erreur lors du scraping : {str(e)}"
+        return f"Error during scraping: {str(e)}"
 
-# Définition des outils pour l'agent
-tools = [
-    Tool(
+def analyze_market_trends(content):
+    """Agent function for market trend analysis."""
+    prompt = f"Analyze the following research content and identify key market trends:\n{content}"
+    return llm.invoke(prompt)
+
+def competitive_analysis(content):
+    """Agent function for competitor analysis."""
+    prompt = f"Based on the following content, provide an overview of the competitive landscape:\n{content}"
+    return llm.invoke(prompt)
+
+def investment_risks(content):
+    """Agent function for risk assessment in investments."""
+    prompt = f"Evaluate the potential risks based on the following research:\n{content}"
+    return llm.invoke(prompt)
+
+# Define AI agents using LangChain tools
+agents = {
+    "Scraper Agent": Tool(
         name="Web Scraper",
         func=scrape_webpage,
-        description="Utilise cette fonction pour récupérer des informations depuis un site web."
+        description="Retrieves and extracts information from a given webpage."
+    ),
+    "Market Research Agent": Tool(
+        name="Market Research",
+        func=analyze_market_trends,
+        description="Analyzes research content to identify market trends."
+    ),
+    "Competitive Intelligence Agent": Tool(
+        name="Competitor Analysis",
+        func=competitive_analysis,
+        description="Provides insights into the competitive landscape based on data."
+    ),
+    "Risk Analysis Agent": Tool(
+        name="Investment Risk Assessment",
+        func=investment_risks,
+        description="Assesses potential risks in a given research domain."
     )
-]
+}
 
-# Initialisation de l'agent LangChain
-agent = initialize_agent(
-    tools,
+# Initialize LangChain agent framework
+agent_executor = initialize_agent(
+    list(agents.values()),
     llm,
     agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
     verbose=True
 )
 
-# Base de données locale avec TinyDB pour stocker les résultats
+# Local database for storing research results
 db = TinyDB("research_results.json")
 
-# Interface Streamlit
-st.title("🔍 Deep Research avec LangChain Agents")
+# Streamlit Interface
+st.title("🔍 AI-Powered Deep Research")
 
-# Entrée de l'URL
-url = st.text_input("Entrez une URL à analyser :")
+# User input for URL
+url = st.text_input("Enter a URL to analyze:")
+task = st.selectbox("Select Research Focus:", list(agents.keys()))
 
-if st.button("Lancer l'analyse"):
+if st.button("Run Analysis"):
     if url:
-        st.write("🔄 Scraping en cours...")
+        st.write(f"🔄 {task} in progress...")
+
+        # Scraping the content
         scraped_content = scrape_webpage(url)
-        
-        st.write("📌 Contenu extrait :")
-        st.write(scraped_content[:500] + "...")  # Afficher un extrait
+        st.write("📌 Extracted Content:")
+        st.write(scraped_content[:500] + "...")
 
-        st.write("🧠 Analyse et résumé en cours...")
-        result = agent.run(f"Donne-moi un résumé du contenu suivant : {scraped_content}")
+        # Running AI analysis based on selected agent
+        st.write(f"🧠 {task} is analyzing the data...")
+        result = agent_executor.run(f"{task}: {scraped_content}")
 
-        st.write("📌 Résumé :")
+        st.write("📌 Analysis Result:")
         st.write(result)
 
-        # Stocker les résultats dans la base locale
-        db.insert({"url": url, "résumé": result})
+        # Store results
+        db.insert({"url": url, "task": task, "result": result})
     else:
-        st.warning("Veuillez entrer une URL valide.")
+        st.warning("Please enter a valid URL.")
